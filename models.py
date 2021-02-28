@@ -53,6 +53,31 @@ class NeuralSentimentClassifier(SentimentClassifier):
         y_hat = torch.argmax(log_probs, dim=1).item()
         return y_hat
 
+class FancySentimentClassifier(SentimentClassifier):
+
+    def __init__(self, model: nn.Module, word_indexer:Indexer):
+        self.model = model
+        self.seq_max_len = 60
+        self.word_vectors = word_indexer
+
+        # evaluate model
+        self.model.eval()
+        self.model.batch_sz = 1
+
+    def predict(self, ex_words: List[str]) -> int:
+
+        # convert sentence to indices
+        indices = word2idxs(ex_words, self.word_vectors)
+
+        # pad sequences
+        indices = pad_to_length(indices, self.seq_max_len)
+
+        indices = torch.LongTensor(indices)
+
+        log_probs = self.model(indices)
+        y_hat = torch.argmax(log_probs, dim=1).item()
+        return y_hat
+
 
 
 def pad_to_length(ex, length):
@@ -68,6 +93,22 @@ def pad_to_length(ex, length):
     result = np.zeros(length)
     result[0:np_arr.shape[0]] = np_arr
     return result
+
+def word2idxs(words: List[str], word_indexer:Indexer):
+    """
+    Converts words in the sentence to it's corresponding index in the vocabulary.
+    """
+    indices = list()
+
+    for w in words:
+        idx = word_indexer.index_of(w)
+        if idx == -1:
+            idx = word_indexer.index_of("UNK")
+        indices.append(idx)
+
+    return indices
+
+
 
 
 def train_ffnn(args, train_exs: List[SentimentExample], dev_exs: List[SentimentExample], word_vectors: WordEmbeddings) -> NeuralSentimentClassifier:
@@ -218,34 +259,24 @@ def train_fancy(args, train_exs: List[SentimentExample],
     n_batches = n_samples // batch_size
 
     # instantiate model
-    model = RNN(word_vectors, h_size=hidden_size)
+    model = RNN(word_vectors, seq_max_len, batch_size, h_size=hidden_size)
     optim = torch.optim.Adam(model.parameters(), lr=lr)
 
     # convert training set to np array
     train_exs_arr = np.array(train_exs)
     train_idxs = np.arange(train_exs_arr.size)
 
-    def _word2idxs(ex:SentimentExample):
-        """
-        Converts words in the sentence to it's corresponding index in the vocabulary.
-        """
-        words = ex.words
+    word_indexer = word_vectors.word_indexer
 
-        indices = list()
 
-        for w in words:
-            idx = word_vectors.word_indexer.index_of(w)
-            if idx == -1:
-                idx = word_vectors.word_indexer.index_of("UNK")
-            indices.append(idx)
-
-        return indices
 
     def _train(model:RNN) -> float:
         """
         Trains RNN on a single epoch of batched examples
         """
         model.train()
+
+        model.batch_sz = batch_size
 
         # shuffle dataset
         np.random.shuffle(train_idxs)
@@ -262,9 +293,12 @@ def train_fancy(args, train_exs: List[SentimentExample],
             input = np.zeros((batch_size, seq_max_len))
             exs = train_exs_arr[batch_idxs]
 
-            # convert sentences to indices and pad to max seq length
-            indices = np.array(list(map(_word2idxs, exs)))
+            # convert sentences to indices
+            indices = list()
+            for ex in exs:
+                indices.append(word2idxs(ex.words, word_indexer))
 
+            # pad sentences
             for i, ex in enumerate(indices):
                 input[i,:] = pad_to_length(ex, seq_max_len)
 
@@ -296,17 +330,20 @@ def train_fancy(args, train_exs: List[SentimentExample],
 
         model.eval()
 
+        # set batch size to 1
+        model.batch_sz = 1
+
         golds = list()
         predictions = list()
 
         with torch.no_grad():
             for ex in dev_exs:
-                x = ex.words
+
                 y = ex.label
                 golds.append(y)
 
                 # convert words to indices
-                x = _word2idxs(ex)
+                x = word2idxs(ex, word_indexer)
                 x = torch.LongTensor(pad_to_length(x, seq_max_len)).reshape((1, seq_max_len))
 
                 log_probs = model(x)
@@ -348,7 +385,7 @@ def train_fancy(args, train_exs: List[SentimentExample],
         f1 = metrics['f1']
         acc = metrics['acc']
 
-        print(f"===> Epoch: {e}, Avg. loss: {avg_loss:.3f}, F1: {f1:.3f}, Acc: {acc:.3f}")
+        print(f"===> Epoch [{e}/{n_epochs}] Avg. loss: {avg_loss:.3f}, F1: {f1:.3f}, Acc: {acc:.3f}")
 
-    nsc = NeuralSentimentClassifier(model)
-    return nsc
+    fsc = FancySentimentClassifier(model, word_indexer)
+    return fsc

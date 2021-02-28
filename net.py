@@ -81,7 +81,7 @@ class RNN(nn.Module):
         self.d_out = d_out
         self.num_layers = 1
         self.seq_len = seq_len
-        self.batch_sz = batch_sz
+        self._batch_sz = batch_sz
 
         # load Glove embeddings
         self.embedder = nn.Embedding.from_pretrained(emb_tensor, freeze=True)
@@ -92,6 +92,13 @@ class RNN(nn.Module):
         # initialize weights of network
         nn.init.xavier_uniform_(self.fc.weight)
 
+    @property
+    def batch_sz(self):
+        return self._batch_sz
+
+    @batch_sz.setter
+    def batch_sz(self, batch_sz:int):
+        self._batch_sz = batch_sz
 
     def forward(self, x:Tensor) -> Tensor:
         """
@@ -99,21 +106,15 @@ class RNN(nn.Module):
         :returns: log probabilities
         """
 
-        # batch_sz = len(x)
-
-        # if self.isBidirectional:
-        #     hidden = torch.zeros((self.num_layers * 2, len(x), self.h_size))
-        # else:
-        #     hidden = torch.zeros((self.num_layers, len(x), self.h_size))  # len(x) is the batch_size
-        #
-        #
-        # init_state = (hidden, hidden)
-
         embeddings = self.embedder(x)
-        output, (h, c) = self.encoder(embeddings)
+        _, (h, c) = self.encoder(embeddings)
 
-        h = h.reshape(self.batch_sz, -1)
+        h = h.reshape(self._batch_sz, -1)
 
         x = self.fc(h)
         x = self.out_layer(x)
         return x
+
+    @batch_sz.setter
+    def batch_sz(self, value):
+        self._batch_sz = value
