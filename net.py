@@ -71,7 +71,7 @@ class FeedForward(nn.Module):
 
 class RNN(nn.Module):
 
-    def __init__(self, word_vectors:WordEmbeddings, h_size=20, d_out=2):
+    def __init__(self, word_vectors:WordEmbeddings, seq_len:int, batch_sz:int, h_size=20, d_out=2):
 
         super(RNN, self).__init__()
 
@@ -80,14 +80,17 @@ class RNN(nn.Module):
         self.h_size = h_size
         self.d_out = d_out
         self.num_layers = 1
+        self.seq_len = seq_len
+        self.batch_sz = batch_sz
 
-        self.embedder = nn.Embedding.from_pretrained(emb_tensor, freeze=True, padding_idx=0)
+        # load Glove embeddings
+        self.embedder = nn.Embedding.from_pretrained(emb_tensor, freeze=True)
         self.encoder = nn.LSTM(self.d_emb, self.h_size, batch_first=True, bidirectional=True)
-        self.encoder_fc = nn.Linear(self.h_size, self.d_out)
+        self.fc = nn.Linear(2*self.h_size, self.d_out)
         self.out_layer = nn.LogSoftmax(dim=1)
 
         # initialize weights of network
-        nn.init.xavier_uniform_(self.encoder_fc.weight)
+        nn.init.xavier_uniform_(self.fc.weight)
 
 
     def forward(self, x:Tensor) -> Tensor:
@@ -109,9 +112,8 @@ class RNN(nn.Module):
         embeddings = self.embedder(x)
         output, (h, c) = self.encoder(embeddings)
 
-        # if self.isBidirectional:
-        #     x = self.linear(h)[self.num_layers * 2 - 1]
+        h = h.reshape(self.batch_sz, -1)
 
-        x = self.encoder_fc(h)[self.num_layers - 1]
+        x = self.fc(h)
         x = self.out_layer(x)
         return x
