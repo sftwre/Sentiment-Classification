@@ -50,7 +50,7 @@ class NeuralSentimentClassifier(SentimentClassifier):
     def predict(self, ex_words: List[str]) -> int:
 
         log_probs = self.model(ex_words)
-        y_hat = torch.argmax(log_probs, dim=1).item()
+        y_hat = torch.argmax(log_probs).item()
         return y_hat
 
 class FancySentimentClassifier(SentimentClassifier):
@@ -68,14 +68,14 @@ class FancySentimentClassifier(SentimentClassifier):
 
         # convert sentence to indices
         indices = word2idxs(ex_words, self.word_vectors)
+        length = torch.LongTensor([len(ex_words)])
 
         # pad sequences
         indices = pad_to_length(indices, self.seq_max_len)
-
         input = torch.LongTensor(indices).reshape(1, -1)
 
-        log_probs = self.model(input)
-        y_hat = torch.argmax(log_probs, dim=1).item()
+        log_probs = self.model(input, length)
+        y_hat = torch.argmax(log_probs).item()
         return y_hat
 
 
@@ -289,34 +289,34 @@ def train_fancy(args, train_exs: List[SentimentExample],
             # get batch of samples
             end = start + batch_size
             batch_idxs = train_idxs[start:end]
-
-            input = np.zeros((batch_size, seq_max_len))
             exs = train_exs_arr[batch_idxs]
 
-            # convert sentences to indices
             indices = list()
-            for ex in exs:
-                indices.append(word2idxs(ex.words, word_indexer))
+            lengths = list()
+            input = np.zeros((batch_size, seq_max_len))
 
-            # pad sentences
-            for i, ex in enumerate(indices):
-                input[i,:] = pad_to_length(ex, seq_max_len)
+            # convert sentences to indices and compute sentence lengths
+            for i, ex in enumerate(exs):
+                # convert sentence to indices
+                sentence_idxs = word2idxs(ex.words, word_indexer)
+                indices.append(sentence_idxs)
+
+                # compute length
+                lengths.append(len(sentence_idxs))
+
+                # pad sentence
+                input[i,:] = pad_to_length(sentence_idxs, seq_max_len)
 
             input = torch.LongTensor(input)
+            lengths = torch.LongTensor(lengths)
 
             # gold labels
             y = torch.tensor(list(map(lambda x: x.label, exs)))
 
-            # pack input and labels
-            # lengths = torch.tensor(np.full(batch_size, seq_max_len))
-            #
-            # input = nn.utils.rnn.pack_padded_sequence(input, lengths, batch_first=True)
-            # y = nn.utils.rnn.pack_padded_sequence(y, lengths)
-
             # zero out gradients from previous computations
             model.zero_grad()
 
-            log_probs = model(input)
+            log_probs = model(input, lengths)
             loss = F.nll_loss(log_probs, y)
             total_loss += loss
 
@@ -342,13 +342,14 @@ def train_fancy(args, train_exs: List[SentimentExample],
                 y = ex.label
                 golds.append(y)
 
-                # convert words to indices
+                # convert words to indices, pad , and compute length
                 x = word2idxs(ex.words, word_indexer)
                 x = torch.LongTensor(pad_to_length(x, seq_max_len)).reshape((1, seq_max_len))
+                length = torch.LongTensor([len(ex.words)])
 
-                log_probs = model(x)
-                y_hat = torch.argmax(log_probs, dim=1)
-                predictions.append(y_hat.item())
+                log_probs = model(x, length)
+                y_hat = torch.argmax(log_probs).item()
+                predictions.append(y_hat)
 
         num_pred = 0
         num_gold = 0

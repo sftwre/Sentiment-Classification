@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 from torch import Tensor
-from torch.nn.utils.rnn import PackedSequence
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from typing import List
 import torch.nn.functional as F
 from sentiment_data import WordEmbeddings
@@ -85,14 +85,14 @@ class RNN(nn.Module):
         # load Glove embeddings
         self.embedder = nn.Embedding.from_pretrained(emb_tensor, freeze=True)
         self.encoder = nn.LSTM(self.d_emb, self.h_size, num_layers=self.num_layers, batch_first=True, bidirectional=True)
-        self.fc1 = nn.Linear(2*self.h_size, self.h_size)
-        self.fc2 = nn.Linear(self.h_size, self.d_out)
+        self.fc1 = nn.Linear(2*self.h_size, self.d_out)
+        # self.fc2 = nn.Linear(self.h_size, self.d_out)
 
         self.out_layer = nn.LogSoftmax(dim=1)
 
         # initialize weights of network
         nn.init.xavier_uniform_(self.fc1.weight)
-        nn.init.xavier_uniform_(self.fc2.weight)
+        # nn.init.xavier_uniform_(self.fc2.weight)
 
     @property
     def batch_sz(self):
@@ -102,24 +102,21 @@ class RNN(nn.Module):
     def batch_sz(self, batch_sz:int):
         self._batch_sz = batch_sz
 
-    def forward(self, x:Tensor) -> Tensor:
+    def forward(self, x:Tensor, lengths:Tensor) -> Tensor:
         """
         :param x: indices of words for input sentences of shape batch_sz x max_seq_len
         :returns: log probabilities
         """
 
         embeddings = self.embedder(x)
-        _, (h, c) = self.encoder(embeddings)
+        packed_input = pack_padded_sequence(embeddings, lengths, batch_first=True, enforce_sorted=False)
+        packed_output, (h, c) = self.encoder(packed_input)
+        output, _ = pad_packed_sequence(packed_output, batch_first=True)
 
         h = h.reshape(self.num_layers, 2, self.batch_sz, self.h_size)
-
         h_final = h[1, :, :, :].reshape(self.batch_sz, -1)
 
         x = self.fc1(h_final)
-        x = self.fc2(x)
+        # x = self.fc2(x)
         x = self.out_layer(x)
         return x
-
-    @batch_sz.setter
-    def batch_sz(self, value):
-        self._batch_sz = value
