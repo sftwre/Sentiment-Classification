@@ -80,12 +80,11 @@ class RNN(nn.Module):
         self.h_size = h_size
         self.d_out = d_out
         self.num_layers = 1
-        self.seq_len = seq_len
         self._batch_sz = batch_sz
 
         # load Glove embeddings
         self.embedder = nn.Embedding.from_pretrained(emb_tensor, freeze=True)
-        self.encoder = nn.LSTM(self.d_emb, self.h_size, batch_first=True, bidirectional=True)
+        self.encoder = nn.LSTM(self.d_emb, self.h_size, num_layers=self.num_layers, batch_first=True, bidirectional=True)
         self.fc = nn.Linear(2*self.h_size, self.d_out)
         self.out_layer = nn.LogSoftmax(dim=1)
 
@@ -109,7 +108,7 @@ class RNN(nn.Module):
         embeddings = self.embedder(x)
         _, (h, c) = self.encoder(embeddings)
 
-        h = h.reshape(self._batch_sz, -1)
+        h = h.reshape(self.batch_sz, -1)
 
         x = self.fc(h)
         x = self.out_layer(x)
