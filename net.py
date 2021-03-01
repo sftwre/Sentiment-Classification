@@ -79,7 +79,7 @@ class RNN(nn.Module):
         self.d_emb = emb_tensor.shape[1]
         self.h_size = h_size
         self.d_out = d_out
-        self.num_layers = 1
+        self.num_layers = 2
         self._batch_sz = batch_sz
 
         # load Glove embeddings
@@ -108,9 +108,11 @@ class RNN(nn.Module):
         embeddings = self.embedder(x)
         _, (h, c) = self.encoder(embeddings)
 
-        h = h.reshape(self.batch_sz, -1)
+        h = h.reshape(self.num_layers, 2, self.batch_sz, self.h_size)
 
-        x = self.fc(h)
+        h_final = h[1, :, :, :].reshape(self.batch_sz, -1)
+
+        x = self.fc(h_final)
         x = self.out_layer(x)
         return x
 

@@ -72,9 +72,9 @@ class FancySentimentClassifier(SentimentClassifier):
         # pad sequences
         indices = pad_to_length(indices, self.seq_max_len)
 
-        indices = torch.LongTensor(indices).reshape(1, -1)
+        input = torch.LongTensor(indices).reshape(1, -1)
 
-        log_probs = self.model(indices)
+        log_probs = self.model(input)
         y_hat = torch.argmax(log_probs, dim=1).item()
         return y_hat
 
