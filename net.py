@@ -110,11 +110,11 @@ class RNN(nn.Module):
 
         embeddings = self.embedder(x)
         packed_input = pack_padded_sequence(embeddings, lengths, batch_first=True, enforce_sorted=False)
-        packed_output, (h, c) = self.encoder(packed_input)
-        output, _ = pad_packed_sequence(packed_output, batch_first=True)
+        _, (h, c) = self.encoder(packed_input)
 
         h = h.reshape(self.num_layers, 2, self.batch_sz, self.h_size)
-        h_final = h[1, :, :, :].reshape(self.batch_sz, -1)
+        h_final = h[1, :, :, :]
+        h_final = h_final.transpose(0, 1).reshape((self.batch_sz, -1))
 
         x = self.fc1(h_final)
         # x = self.fc2(x)

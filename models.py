@@ -314,7 +314,7 @@ def train_fancy(args, train_exs: List[SentimentExample],
             y = torch.tensor(list(map(lambda x: x.label, exs)))
 
             # zero out gradients from previous computations
-            model.zero_grad()
+            optim.zero_grad()
 
             log_probs = model(input, lengths)
             loss = F.nll_loss(log_probs, y)
