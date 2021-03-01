@@ -85,11 +85,14 @@ class RNN(nn.Module):
         # load Glove embeddings
         self.embedder = nn.Embedding.from_pretrained(emb_tensor, freeze=True)
         self.encoder = nn.LSTM(self.d_emb, self.h_size, num_layers=self.num_layers, batch_first=True, bidirectional=True)
-        self.fc = nn.Linear(2*self.h_size, self.d_out)
+        self.fc1 = nn.Linear(2*self.h_size, self.h_size)
+        self.fc2 = nn.Linear(self.h_size, self.d_out)
+
         self.out_layer = nn.LogSoftmax(dim=1)
 
         # initialize weights of network
-        nn.init.xavier_uniform_(self.fc.weight)
+        nn.init.xavier_uniform_(self.fc1.weight)
+        nn.init.xavier_uniform_(self.fc2.weight)
 
     @property
     def batch_sz(self):
@@ -112,7 +115,8 @@ class RNN(nn.Module):
 
         h_final = h[1, :, :, :].reshape(self.batch_sz, -1)
 
-        x = self.fc(h_final)
+        x = self.fc1(h_final)
+        x = self.fc2(x)
         x = self.out_layer(x)
         return x
 
