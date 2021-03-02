@@ -268,6 +268,8 @@ def train_fancy(args, train_exs: List[SentimentExample],
 
     word_indexer = word_vectors.word_indexer
 
+    # tensorboard writer
+    writer = SummaryWriter()
 
 
     def _train(model:RNN) -> float:
@@ -387,6 +389,14 @@ def train_fancy(args, train_exs: List[SentimentExample],
         acc = metrics['acc']
 
         print(f"===> Epoch [{e}/{n_epochs}] Avg. loss: {avg_loss:.3f}, F1: {f1:.3f}, Acc: {acc:.3f}")
+
+        # log loss
+        writer.add_scalar('Fancy_Train / Loss', avg_loss, e)
+        writer.add_scalar('Fancy_Dev / F1', f1, e)
+        writer.add_scalar('Fancy_Dev / Accuracy', acc, e)
+
+    writer.flush()
+    writer.close()
 
     fsc = FancySentimentClassifier(model, word_indexer)
     return fsc
