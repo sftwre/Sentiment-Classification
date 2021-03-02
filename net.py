@@ -84,15 +84,13 @@ class RNN(nn.Module):
 
         # load Glove embeddings
         self.embedder = nn.Embedding.from_pretrained(emb_tensor, freeze=True)
-        self.encoder = nn.LSTM(self.d_emb, self.h_size, num_layers=self.num_layers, batch_first=True, bidirectional=True)
-        self.fc1 = nn.Linear(2*self.h_size, self.d_out)
-        # self.fc2 = nn.Linear(self.h_size, self.d_out)
-
+        self.encoder = nn.LSTM(self.d_emb, self.h_size, num_layers=self.num_layers, batch_first=True)
+        self.dropout = nn.Dropout(p=0.5)
+        self.fc = nn.Linear(self.h_size, self.d_out)
         self.out_layer = nn.LogSoftmax(dim=1)
 
         # initialize weights of network
-        nn.init.xavier_uniform_(self.fc1.weight)
-        # nn.init.xavier_uniform_(self.fc2.weight)
+        nn.init.xavier_uniform_(self.fc.weight)
 
     @property
     def batch_sz(self):
@@ -112,11 +110,13 @@ class RNN(nn.Module):
         packed_input = pack_padded_sequence(embeddings, lengths, batch_first=True, enforce_sorted=False)
         _, (h, c) = self.encoder(packed_input)
 
-        h = h.reshape(self.num_layers, 2, self.batch_sz, self.h_size)
+        # reshape and isolate hidden state for final layer
+        h = h.reshape(self.num_layers, 1, self.batch_sz, self.h_size)
         h_final = h[1, :, :, :]
         h_final = h_final.transpose(0, 1).reshape((self.batch_sz, -1))
 
-        x = self.fc1(h_final)
-        # x = self.fc2(x)
+        h_final = self.dropout(h_final)
+
+        x = self.fc(h_final)
         x = self.out_layer(x)
         return x
