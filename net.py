@@ -39,8 +39,6 @@ class FeedForward(nn.Module):
 
     def forward(self, x:List[str]):
 
-        # TODO add batching
-
         # convert text to embeddings
         indices = list()
 
